@@ -1,1 +1,1 @@
-cm8p-appjs-mojibake-fixed-20260512-213637
+﻿cm8p-magic-state-machine-20260512-221541

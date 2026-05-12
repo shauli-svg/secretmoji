@@ -7,27 +7,66 @@
   const decoder = new TextDecoder();
   const $ = (id) => document.getElementById(id);
 
+  const STATES = Object.freeze({
+    BOOT: "boot",
+    COMPOSE: "compose",
+    COMPOSE_DRAWING: "composeDrawing",
+    INCOMING_LOCKED: "incomingLocked",
+    INCOMING_TRYING: "incomingTrying",
+    INCOMING_OPEN: "incomingOpen",
+    REPLY: "reply",
+    SETTINGS: "settings",
+    FALLBACK: "fallback"
+  });
+
   const state = {
-    screen: "boot",
+    route: STATES.BOOT,
     currentCapsule: null,
     currentSkin: "candy",
     outgoingSign: null,
+    outgoingPattern: [],
+    replyPattern: [],
     pattern: [],
     latestShareText: "",
     latestLink: "",
     unlockedPlain: "",
-    resetTimer: null
+    composeDraft: "",
+    replyDraft: "",
+    hasHash: false,
+    parseOk: false,
+    lastDecryptStatus: "idle",
+    resetTimer: null,
+    audio: null
   };
 
-  const profileKey = `${truth.storagePrefix}profile`;
+  function debugReadback() {
+    window.CodeMojiDebug = {
+      version: VERSION,
+      hasHash: state.hasHash,
+      capsuleVersion: state.currentCapsule?.v || null,
+      parseOk: state.parseOk,
+      route: state.route,
+      currentCapsuleExists: Boolean(state.currentCapsule),
+      lastDecryptStatus: state.lastDecryptStatus
+    };
+  }
 
   function setStatus(message) {
     $("statusLine").textContent = message || "";
+    debugReadback();
   }
 
   function setTitle(title, subtitle) {
     $("cardTitle").textContent = title;
     $("cardSubtitle").textContent = subtitle || "";
+  }
+
+  function card() {
+    return $("appCard");
+  }
+
+  function setPrimaryVisible(visible) {
+    $("primaryBtn").classList.toggle("hidden", !visible);
   }
 
   function bytesToBase64Url(bytes) {
@@ -37,7 +76,7 @@
   }
 
   function base64UrlToBytes(value) {
-    const normalized = String(value).replace(/-/g, "+").replace(/_/g, "/");
+    const normalized = String(value || "").replace(/-/g, "+").replace(/_/g, "/");
     const padded = normalized + "=".repeat((4 - normalized.length % 4) % 4);
     const binary = atob(padded);
     return Uint8Array.from(binary, (ch) => ch.charCodeAt(0));
@@ -139,56 +178,6 @@
     return decoder.decode(plain);
   }
 
-  async function derivePatternVerifier(pattern, saltB64) {
-    const salt = base64UrlToBytes(saltB64);
-    const raw = await crypto.subtle.importKey("raw", encoder.encode(pattern.join("-")), "PBKDF2", false, ["deriveBits"]);
-    const bits = await crypto.subtle.deriveBits({
-      name: "PBKDF2",
-      salt,
-      iterations: truth.limits.pbkdf2Iterations,
-      hash: "SHA-256"
-    }, raw, 192);
-    return bytesToBase64Url(new Uint8Array(bits));
-  }
-
-  function getProfile() {
-    try {
-      const raw = localStorage.getItem(profileKey);
-      return raw ? JSON.parse(raw) : null;
-    } catch {
-      return null;
-    }
-  }
-
-  function hasProfile() {
-    const p = getProfile();
-    return Boolean(p && p.version === VERSION && p.salt && p.verifier);
-  }
-
-  async function saveProfile(pattern) {
-    const salt = bytesToBase64Url(randomBytes(16));
-    const verifier = await derivePatternVerifier(pattern, salt);
-    localStorage.setItem(profileKey, JSON.stringify({
-      version: VERSION,
-      exists: true,
-      salt,
-      verifier,
-      createdAt: new Date().toISOString(),
-      skinPreference: state.currentSkin || "candy"
-    }));
-  }
-
-  async function verifyPattern(pattern) {
-    const profile = getProfile();
-    if (!profile) return false;
-    const verifier = await derivePatternVerifier(pattern, profile.salt);
-    return verifier === profile.verifier;
-  }
-
-  function clearProfile() {
-    localStorage.removeItem(profileKey);
-  }
-
   function compactCapsule(capsule) {
     return [
       VERSION,
@@ -279,8 +268,22 @@
   function clearDynamic() {
     $("dynamicArea").innerHTML = "";
     $("secondaryRow").innerHTML = "";
+    $("primaryBtn").onclick = null;
+    $("primaryBtn").onpointerdown = null;
+    $("primaryBtn").onpointerup = null;
+    $("primaryBtn").onpointerleave = null;
+    $("primaryBtn").disabled = false;
     $("primaryBtn").classList.remove("hidden");
+    card().className = "codemoji-card glass";
+    card().dataset.route = state.route;
     setStatus("");
+  }
+
+  function createEl(tag, className, text) {
+    const el = document.createElement(tag);
+    if (className) el.className = className;
+    if (text !== undefined) el.textContent = text;
+    return el;
   }
 
   function createButton(label, className, onClick) {
@@ -292,129 +295,252 @@
     return btn;
   }
 
-  function resetPatternState() {
-    state.pattern = [];
+  function vibrate(pattern) {
+    try {
+      if (navigator.vibrate) navigator.vibrate(pattern);
+    } catch {}
   }
 
-  function renderPatternGrid() {
-    const template = $("patternTemplate").content.cloneNode(true);
-    const grid = template.querySelector("[data-pattern-grid]");
-    const readout = template.querySelector("[data-pattern-readout]");
+  function prefersReducedMotion() {
+    return window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+  }
 
-    function refresh() {
-      const count = state.pattern.length;
+  function tone(kind) {
+    try {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContext) return;
+      if (!state.audio) state.audio = new AudioContext();
+      const ctx = state.audio;
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      const map = {
+        tick: [720, 0.035, 0.018],
+        success: [920, 0.12, 0.032],
+        fail: [180, 0.08, 0.025]
+      };
+      const [freq, duration, volume] = map[kind] || map.tick;
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(volume, now + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + duration + 0.02);
+    } catch {}
+  }
+
+  function patternPointCenter(grid, dot) {
+    const g = grid.getBoundingClientRect();
+    const d = dot.getBoundingClientRect();
+    return {
+      x: d.left + d.width / 2 - g.left,
+      y: d.top + d.height / 2 - g.top
+    };
+  }
+
+  function renderPatternGrid(options = {}) {
+    const wrap = createEl("div", "pattern-wrap");
+    if (options.variant) wrap.dataset.variant = options.variant;
+
+    const grid = createEl("div", "pattern-grid");
+    grid.setAttribute("data-pattern-grid", "");
+    grid.setAttribute("aria-label", "לוח ציור סימן 3 על 3");
+
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.classList.add("pattern-line-layer");
+    svg.setAttribute("aria-hidden", "true");
+    const polyline = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
+    polyline.classList.add("pattern-line");
+    svg.appendChild(polyline);
+    grid.appendChild(svg);
+
+    const dots = new Map();
+    let localPattern = [];
+    let activePointerId = null;
+    let currentPointer = null;
+    let completed = false;
+
+    const readout = createEl("div", "pattern-readout", options.initialText || "צייר/י סימן");
+
+    function emitChange() {
+      if (typeof options.onChange === "function") options.onChange(localPattern.slice());
+    }
+
+    function updateReadout() {
       const min = truth.limits.minPatternPoints;
-      readout.textContent = count < min
-        ? `בחר/י לפחות ${min} נקודות — נבחרו ${count}`
-        : `הסימן מוכן: ${state.pattern.join(" → ")}`;
+      if (localPattern.length === 0) {
+        readout.textContent = options.initialText || "צייר/י סימן";
+      } else if (localPattern.length < min) {
+        readout.textContent = `עוד ${min - localPattern.length}`;
+      } else {
+        readout.textContent = options.readyText || "מוכן";
+      }
+    }
+
+    function updateLine() {
+      const points = localPattern
+        .map((point) => dots.get(point))
+        .filter(Boolean)
+        .map((dot) => patternPointCenter(grid, dot));
+
+      if (currentPointer && points.length) points.push(currentPointer);
+      polyline.setAttribute("points", points.map((p) => `${p.x},${p.y}`).join(" "));
+    }
+
+    function resetLocalPattern() {
+      localPattern = [];
+      completed = false;
+      currentPointer = null;
+      dots.forEach((dot) => dot.classList.remove("selected"));
+      updateLine();
+      updateReadout();
+      emitChange();
+    }
+
+    function addPoint(point) {
+      if (localPattern.includes(point)) return;
+      localPattern.push(point);
+      dots.get(point)?.classList.add("selected");
+      vibrate(8);
+      tone("tick");
+      updateLine();
+      updateReadout();
+      emitChange();
+    }
+
+    function dotFromClient(x, y) {
+      const el = document.elementFromPoint(x, y);
+      const dot = el?.closest?.(".pattern-dot");
+      if (dot && grid.contains(dot)) return dot;
+      return null;
+    }
+
+    function start(e, point) {
+      if (options.disabled) return;
+      if (completed || !activePointerId) resetLocalPattern();
+      activePointerId = e.pointerId;
+      grid.setPointerCapture?.(activePointerId);
+      grid.classList.add("drawing");
+      addPoint(point);
+      e.preventDefault();
+    }
+
+    function move(e) {
+      if (activePointerId !== e.pointerId) return;
+      const g = grid.getBoundingClientRect();
+      currentPointer = { x: e.clientX - g.left, y: e.clientY - g.top };
+      const dot = dotFromClient(e.clientX, e.clientY);
+      if (dot) addPoint(Number(dot.dataset.point));
+      updateLine();
+      e.preventDefault();
+    }
+
+    function end(e) {
+      if (activePointerId !== e.pointerId) return;
+      activePointerId = null;
+      currentPointer = null;
+      grid.classList.remove("drawing");
+      updateLine();
+      completed = true;
+      state.pattern = localPattern.slice();
+      if (typeof options.onComplete === "function") options.onComplete(localPattern.slice());
+      e.preventDefault();
     }
 
     for (let i = 1; i <= 9; i += 1) {
       const dot = document.createElement("button");
       dot.type = "button";
       dot.className = "pattern-dot";
-      dot.textContent = String(i);
       dot.dataset.point = String(i);
-      dot.addEventListener("click", () => {
-        const idx = state.pattern.indexOf(i);
-        if (idx >= 0) {
-          state.pattern.splice(idx, 1);
-          dot.classList.remove("selected");
-        } else {
-          state.pattern.push(i);
-          dot.classList.add("selected");
-        }
-        refresh();
-      });
+      dot.setAttribute("aria-label", `נקודה ${i}`);
+      dot.addEventListener("pointerdown", (e) => start(e, i));
+      dots.set(i, dot);
       grid.appendChild(dot);
     }
 
-    refresh();
-    return template;
+    grid.addEventListener("pointermove", move);
+    grid.addEventListener("pointerup", end);
+    grid.addEventListener("pointercancel", end);
+    window.addEventListener("resize", updateLine);
+
+    if (options.ghostTrace && !prefersReducedMotion()) {
+      const ghost = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
+      ghost.classList.add("pattern-ghost-line");
+      svg.appendChild(ghost);
+      requestAnimationFrame(() => {
+        const hint = options.ghostPattern || [1, 2, 3, 6];
+        const points = hint
+          .map((point) => dots.get(point))
+          .filter(Boolean)
+          .map((dot) => patternPointCenter(grid, dot));
+        ghost.setAttribute("points", points.map((p) => `${p.x},${p.y}`).join(" "));
+        grid.classList.add("show-ghost");
+        window.setTimeout(() => {
+          grid.classList.remove("show-ghost");
+          window.setTimeout(() => ghost.remove(), 260);
+        }, 900);
+      });
+    }
+
+    updateReadout();
+    wrap.appendChild(grid);
+    wrap.appendChild(readout);
+    return wrap;
   }
 
-  function showScreen(name) {
-    state.screen = name;
+  function transition(next, patch = {}) {
+    Object.assign(state, patch);
+    state.route = next;
+    debugReadback();
+    render();
+  }
+
+  function render() {
     clearDynamic();
-
-    if (name === "onboarding") return renderOnboarding();
-    if (name === "compose") return renderCompose();
-    if (name === "ready") return renderReady();
-    if (name === "incoming") return renderIncoming();
-    if (name === "read") return renderRead();
-    if (name === "reply") return renderReply();
-    if (name === "reset") return renderReset();
-  }
-
-  function renderOnboarding() {
-    resetPatternState();
-    const incoming = Boolean(state.currentCapsule);
-    setTitle(
-      incoming ? "קיבלת CodeMoji" : "בחר/י סימן קבוע",
-      incoming
-        ? "כדי לפתוח, בחר/י סימן קבוע שנשמר רק במכשיר הזה."
-        : "הסימן הזה יפתח קודים במכשיר הזה. בלי חשבון ובלי הרשמה."
-    );
-
-    const area = $("dynamicArea");
-    const note = document.createElement("div");
-    note.className = "soft-box";
-    note.textContent = "לא שומרים raw pattern. נשמר רק verifier מקומי.";
-    area.appendChild(note);
-    area.appendChild(renderPatternGrid());
-
-    $("primaryBtn").textContent = incoming ? "שמור/י סימן ופתח/י" : "שמור/י סימן";
-    $("primaryBtn").onclick = async () => {
-      if (state.pattern.length < truth.limits.minPatternPoints) {
-        setStatus("צריך לפחות 4 נקודות.");
-        return;
-      }
-      await saveProfile(state.pattern);
-      setStatus("הסימן נשמר במכשיר.");
-      if (state.currentCapsule) {
-        await unlockWithCurrentPattern(true);
-      } else {
-        showScreen("compose");
-      }
-    };
+    if (state.route === STATES.COMPOSE) return renderCompose();
+    if (state.route === STATES.INCOMING_LOCKED) return renderIncomingLocked();
+    if (state.route === STATES.INCOMING_TRYING) return renderIncomingTrying();
+    if (state.route === STATES.INCOMING_OPEN) return renderIncomingOpen();
+    if (state.route === STATES.REPLY) return renderReply();
+    if (state.route === STATES.SETTINGS) return renderSettings();
+    if (state.route === STATES.FALLBACK) return renderFallback();
+    return renderCompose();
   }
 
   function renderCompose() {
-    resetPatternState();
-    state.outgoingSign = pickEmojiPassword();
-    applySkin(pickSkin());
+    state.currentCapsule = null;
+    state.parseOk = false;
+    state.lastDecryptStatus = "idle";
+    state.outgoingSign ||= pickEmojiPassword();
+    if (!state.currentSkin) applySkin(pickSkin());
 
-    setTitle("כתוב/י משהו קטן", "מסך אחד. פעולה אחת. שליחה מהירה.");
+    setTitle("כתוב/י פתק", "צייר/י סימן קטן ושלח/י.");
     const area = $("dynamicArea");
 
     const textarea = document.createElement("textarea");
     textarea.id = "messageInput";
     textarea.className = "message-input";
     textarea.maxLength = truth.limits.maxMessageChars;
-    textarea.rows = 5;
+    textarea.rows = 4;
     textarea.placeholder = "משהו קצר ומסקרן...";
+    textarea.value = state.composeDraft || "";
     area.appendChild(textarea);
 
-    const counter = document.createElement("div");
-    counter.className = "counter";
-    counter.textContent = `0/${truth.limits.maxMessageChars}`;
-    area.appendChild(counter);
+    const progress = createEl("div", "text-progress");
+    const bar = createEl("span", "text-progress-bar");
+    progress.appendChild(bar);
+    area.appendChild(progress);
 
-    textarea.addEventListener("input", () => {
-      counter.textContent = `${textarea.value.length}/${truth.limits.maxMessageChars}`;
-    });
-
-    const sign = document.createElement("div");
-    sign.className = "sign-card";
+    const sign = createEl("div", "sign-card compact-sign");
     sign.innerHTML = `
-      <span>סימן לשליחה:</span>
+      <span>סימן שיתוף</span>
       <strong dir="ltr">${state.outgoingSign.symbols}</strong>
       <small dir="ltr">${state.outgoingSign.words}</small>
     `;
     area.appendChild(sign);
 
-    const skinRow = document.createElement("div");
-    skinRow.className = "skin-row";
+    const skinRow = createEl("div", "skin-row");
     for (const skin of truth.skins) {
       const b = createButton(skin.label, `skin-chip skin-${skin.code}`, () => {
         applySkin(skin.code);
@@ -426,221 +552,238 @@
     }
     area.appendChild(skinRow);
 
-    const patternNote = document.createElement("div");
-    patternNote.className = "soft-box";
-    patternNote.textContent = "Draw a shared 3x3 sign. This sign derives the encryption key.";
-    area.appendChild(patternNote);
-    area.appendChild(renderPatternGrid());
+    const hint = createEl("div", "micro-hint", "צייר/י את הסימן שהמקבל יכיר.");
+    area.appendChild(hint);
 
-    $("primaryBtn").textContent = "צור/י קוד";
+    function updateValid() {
+      state.composeDraft = textarea.value;
+      const pct = Math.min(100, Math.round((textarea.value.length / truth.limits.maxMessageChars) * 100));
+      bar.style.width = `${pct}%`;
+      $("primaryBtn").disabled = !(textarea.value.trim() && state.outgoingPattern.length >= truth.limits.minPatternPoints);
+      debugReadback();
+    }
+
+    area.appendChild(renderPatternGrid({
+      variant: "compose",
+      initialText: "צייר/י סימן",
+      readyText: "סימן מוכן",
+      onChange(pattern) {
+        state.outgoingPattern = pattern;
+        updateValid();
+      },
+      onComplete(pattern) {
+        state.outgoingPattern = pattern;
+        updateValid();
+      }
+    }));
+
+    $("primaryBtn").textContent = "שלח ב־WhatsApp";
     $("primaryBtn").onclick = async () => {
       const message = textarea.value.trim();
-      if (!message) {
-        setStatus("כתוב/י הודעה קצרה לפני יצירת קוד.");
-        return;
+      if (!message) return setStatus("כתוב/י הודעה.");
+      if (state.outgoingPattern.length < truth.limits.minPatternPoints) return setStatus("צייר/י לפחות 4 נקודות.");
+      try {
+        const capsule = await makeCapsule(message, state.outgoingPattern);
+        state.latestShareText = buildShareText(capsule);
+        state.latestLink = capsuleToLink(capsule);
+        state.currentCapsule = capsule;
+        openWhatsApp(state.latestShareText);
+      } catch {
+        setStatus("לא הצלחתי ליצור קוד. נסה/י שוב.");
       }
-      if (message.length > truth.limits.maxMessageChars) {
-        setStatus(`עד ${truth.limits.maxMessageChars} תווים.`);
-        return;
-      }
-      if (state.pattern.length < truth.limits.minPatternPoints) {
-        setStatus("Draw a sign of at least 4 points.");
-        return;
-      }
-      const capsule = await makeCapsule(message, state.pattern);
-      state.latestShareText = buildShareText(capsule);
-      state.latestLink = capsuleToLink(capsule);
-      state.currentCapsule = capsule;
-      showScreen("ready");
     };
 
-    $("secondaryRow").appendChild(createButton("איפוס סימן", "ghost-btn", () => showScreen("reset")));
+    $("secondaryRow").appendChild(createButton("חדש", "ghost-btn", () => {
+      state.composeDraft = "";
+      state.outgoingPattern = [];
+      state.outgoingSign = pickEmojiPassword();
+      applySkin(pickSkin());
+      transition(STATES.COMPOSE);
+    }));
+
+    updateValid();
   }
 
-  function renderReady() {
-    setTitle("הקוד מוכן", "שלח/י, העתיק/י, או פתח/י תצוגה מקדימה.");
-    const area = $("dynamicArea");
-
-    const ready = document.createElement("div");
-    ready.className = "ready-box";
-    ready.innerHTML = `
-      <div class="big-sign" dir="ltr">${state.currentCapsule.ep.symbols}</div>
-      <div class="words" dir="ltr">${state.currentCapsule.ep.words}</div>
-      <a class="pretty-link" href="${state.latestLink}">פתח/י את הקוד ✨</a>
-      <textarea id="rawLinkBox" class="raw-link hidden" readonly>${state.latestShareText}</textarea>
-    `;
-    area.appendChild(ready);
-
-    $("primaryBtn").textContent = "שלח/י בוואטסאפ";
-    $("primaryBtn").onclick = () => openWhatsApp(state.latestShareText);
-
-    $("secondaryRow").appendChild(createButton("Copy", "secondary-btn", async () => {
-      const ok = await copyText(state.latestShareText);
-      setStatus(ok ? "הקוד הועתק." : "הדפדפן חסם העתקה. הצגתי קישור ידני.");
-      if (!ok) $("rawLinkBox").classList.remove("hidden");
-    }));
-
-    $("secondaryRow").appendChild(createButton("Share", "secondary-btn", async () => {
-      const shared = await shareText(state.latestShareText);
-      setStatus(shared ? "חלון השיתוף נפתח." : "שיתוף לא זמין כאן. הקוד הועתק.");
-    }));
-
-    $("secondaryRow").appendChild(createButton("Preview", "ghost-btn", () => {
-      const cap = extractCapsuleFromText(state.latestLink);
-      if (cap) {
-        state.currentCapsule = cap;
-        showScreen("incoming");
-      }
-    }));
-
-    $("secondaryRow").appendChild(createButton("הצג קישור", "ghost-btn", () => {
-      $("rawLinkBox").classList.toggle("hidden");
-    }));
-  }
-
-  function renderIncoming() {
-    resetPatternState();
+  function renderIncomingLocked() {
     const capsule = state.currentCapsule;
     applySkin(capsule?.skin || "candy");
+    setPrimaryVisible(false);
+    setTitle("צייר/י לפתיחה", "");
 
-    setTitle("קיבלת CodeMoji", "צייר/י את הסימן שלך כדי לפתוח לקריאה.");
     const area = $("dynamicArea");
-
-    const visible = document.createElement("div");
-    visible.className = "sign-card incoming-sign";
+    const visible = createEl("div", "sign-card incoming-sign compact-sign");
     visible.innerHTML = `
-      <span>הסימן שקיבלת:</span>
-      <strong dir="ltr">${capsule.ep.symbols}</strong>
-      <small dir="ltr">${capsule.ep.words}</small>
+      <span>CodeMoji</span>
+      <strong dir="ltr">${capsule?.ep?.symbols || ""}</strong>
+      <small dir="ltr">${capsule?.ep?.words || ""}</small>
     `;
     area.appendChild(visible);
-    area.appendChild(renderPatternGrid());
 
-    $("primaryBtn").textContent = "פתח/י";
-    $("primaryBtn").onclick = () => unlockWithCurrentPattern(false);
-
-    $("secondaryRow").appendChild(createButton("שכחתי סימן", "ghost-btn", () => showScreen("reset")));
+    area.appendChild(renderPatternGrid({
+      variant: "incoming",
+      ghostTrace: true,
+      initialText: state.lastDecryptStatus === "fail" ? "נסה שוב" : "המחווה היא הכפתור",
+      readyText: "פותח...",
+      onComplete(pattern) {
+        if (pattern.length < truth.limits.minPatternPoints) {
+          setStatus("עוד קצת.");
+          return;
+        }
+        unlockWithPattern(pattern);
+      }
+    }));
   }
 
-  async function unlockWithCurrentPattern(profileJustCreated) {
-    if (!state.currentCapsule) return;
-    if (state.pattern.length < truth.limits.minPatternPoints) {
-      setStatus("צריך לפחות 4 נקודות.");
-      return;
-    }
+  function renderIncomingTrying() {
+    setPrimaryVisible(false);
+    setTitle("פותח...", "");
+    const area = $("dynamicArea");
+    area.appendChild(createEl("div", "unlock-pulse", "✦"));
+    setStatus("בודק את הסימן");
+  }
 
-    if (!profileJustCreated && state.currentCapsule.v !== "CM8P") {
-      const ok = await verifyPattern(state.pattern);
-      if (!ok) {
-        setStatus("הסימן לא תואם למכשיר הזה.");
-        return;
-      }
-    }
+  async function unlockWithPattern(pattern) {
+    if (!state.currentCapsule) return transition(STATES.COMPOSE);
+    state.pattern = pattern.slice();
+    state.lastDecryptStatus = "trying";
+    transition(STATES.INCOMING_TRYING);
 
     try {
       const plain = await decryptCapsule(state.currentCapsule, state.pattern);
       state.unlockedPlain = plain;
-      showScreen("read");
+      state.lastDecryptStatus = "success";
+      vibrate(28);
+      tone("success");
+      transition(STATES.INCOMING_OPEN);
     } catch {
-      setStatus("הקוד לא נפתח. יכול להיות שהקישור נחתך.");
+      state.unlockedPlain = "";
+      state.lastDecryptStatus = "fail";
+      vibrate([12, 24, 12]);
+      tone("fail");
+      transition(STATES.INCOMING_LOCKED);
+      card().classList.add("soft-shake");
+      window.setTimeout(() => card().classList.remove("soft-shake"), 360);
+      setStatus("נסה שוב");
     }
   }
 
-  function renderRead() {
-    setTitle("נפתח", "ההודעה לקריאה בלבד. אפשר להשיב בקוד.");
+  function renderIncomingOpen() {
+    setTitle("נפתח", "");
     const area = $("dynamicArea");
-    const msg = document.createElement("article");
-    msg.className = "plain-message";
+    const msg = createEl("article", "plain-message reveal-message");
     msg.textContent = state.unlockedPlain || "";
     area.appendChild(msg);
 
-    $("primaryBtn").textContent = "השב/י בקוד";
-    $("primaryBtn").onclick = () => showScreen("reply");
-
-    $("secondaryRow").appendChild(createButton("צור/י חדש", "secondary-btn", () => {
-      state.currentCapsule = null;
-      state.unlockedPlain = "";
-      showScreen("compose");
-    }));
+    $("primaryBtn").textContent = "השב/י";
+    $("primaryBtn").onclick = () => transition(STATES.REPLY, {
+      replyDraft: "",
+      replyPattern: [],
+      outgoingPattern: [],
+      outgoingSign: pickEmojiPassword()
+    });
   }
 
   function renderReply() {
-    resetPatternState();
-    state.outgoingSign = pickEmojiPassword();
-    applySkin(pickSkin());
+    state.outgoingSign ||= pickEmojiPassword();
+    applySkin(state.currentSkin || pickSkin());
+    setTitle("תשובה קטנה", "כתוב/י, צייר/י, שלח/י.");
 
-    setTitle("כתוב/י תשובה", "תשובה קצרה שחוזרת לאותו לופ.");
     const area = $("dynamicArea");
-
     const textarea = document.createElement("textarea");
     textarea.id = "replyInput";
     textarea.className = "message-input";
     textarea.maxLength = truth.limits.maxMessageChars;
-    textarea.rows = 5;
+    textarea.rows = 4;
     textarea.placeholder = "תשובה קצרה...";
+    textarea.value = state.replyDraft || "";
     area.appendChild(textarea);
 
-    const patternNote = document.createElement("div");
-    patternNote.className = "soft-box";
-    patternNote.textContent = "Draw a sign for the encrypted reply.";
-    area.appendChild(patternNote);
-    area.appendChild(renderPatternGrid());
+    const progress = createEl("div", "text-progress");
+    const bar = createEl("span", "text-progress-bar");
+    progress.appendChild(bar);
+    area.appendChild(progress);
 
-    $("primaryBtn").textContent = "שלח/י חזרה";
+    const sign = createEl("div", "sign-card compact-sign");
+    sign.innerHTML = `
+      <span>סימן שיתוף</span>
+      <strong dir="ltr">${state.outgoingSign.symbols}</strong>
+      <small dir="ltr">${state.outgoingSign.words}</small>
+    `;
+    area.appendChild(sign);
+
+    const hint = createEl("div", "micro-hint", "צייר/י סימן לתשובה.");
+    area.appendChild(hint);
+
+    function updateValid() {
+      state.replyDraft = textarea.value;
+      const pct = Math.min(100, Math.round((textarea.value.length / truth.limits.maxMessageChars) * 100));
+      bar.style.width = `${pct}%`;
+      $("primaryBtn").disabled = !(textarea.value.trim() && state.replyPattern.length >= truth.limits.minPatternPoints);
+    }
+
+    area.appendChild(renderPatternGrid({
+      variant: "reply",
+      initialText: "צייר/י סימן",
+      readyText: "סימן מוכן",
+      onChange(pattern) {
+        state.replyPattern = pattern;
+        updateValid();
+      },
+      onComplete(pattern) {
+        state.replyPattern = pattern;
+        updateValid();
+      }
+    }));
+
+    $("primaryBtn").textContent = "שלח ב־WhatsApp";
     $("primaryBtn").onclick = async () => {
       const message = textarea.value.trim();
-      if (!message) {
-        setStatus("כתוב/י תשובה קצרה.");
-        return;
+      if (!message) return setStatus("כתוב/י תשובה.");
+      if (state.replyPattern.length < truth.limits.minPatternPoints) return setStatus("צייר/י לפחות 4 נקודות.");
+      try {
+        const capsule = await makeCapsule(message, state.replyPattern);
+        state.latestShareText = buildShareText(capsule);
+        state.latestLink = capsuleToLink(capsule);
+        state.currentCapsule = capsule;
+        openWhatsApp(state.latestShareText);
+      } catch {
+        setStatus("לא הצלחתי ליצור תשובה. נסה/י שוב.");
       }
-      if (state.pattern.length < truth.limits.minPatternPoints) {
-        setStatus("Draw a sign of at least 4 points.");
-        return;
-      }
-      const capsule = await makeCapsule(message, state.pattern);
-      state.latestShareText = buildShareText(capsule);
-      state.latestLink = capsuleToLink(capsule);
-      state.currentCapsule = capsule;
-      showScreen("ready");
     };
 
-    $("secondaryRow").appendChild(createButton("חזרה", "ghost-btn", () => showScreen("read")));
+    $("secondaryRow").appendChild(createButton("חזרה", "ghost-btn", () => transition(STATES.INCOMING_OPEN)));
+    updateValid();
   }
 
-  function renderReset() {
-    resetPatternState();
-    setTitle("איפוס סימן", "איפוס ימחק את הסימן מהמכשיר הזה. קודים ישנים עלולים לא להיפתח.");
+  function renderSettings() {
+    setTitle("אפשרויות", "");
     const area = $("dynamicArea");
+    area.appendChild(createEl("div", "soft-box", "כאן נשארים רק דברים צדדיים. המסך הראשי נשאר נקי."));
 
-    const warning = document.createElement("div");
-    warning.className = "danger-box";
-    warning.textContent = "לחיצה ארוכה של 3 שניות תאפס את הסימן המקומי.";
-    area.appendChild(warning);
-
-    $("primaryBtn").textContent = "לחיצה ארוכה לאיפוס";
-    $("primaryBtn").onpointerdown = () => {
-      setStatus("מחזיק... 3 שניות");
-      state.resetTimer = window.setTimeout(() => {
-        clearProfile();
-        setStatus("הסימן אופס. בחר/י סימן חדש.");
-        $("primaryBtn").onpointerdown = null;
-        $("primaryBtn").onpointerup = null;
-        showScreen("onboarding");
-      }, 3000);
+    $("primaryBtn").textContent = "חזרה";
+    $("primaryBtn").onclick = () => {
+      if (state.currentCapsule && state.unlockedPlain) return transition(STATES.INCOMING_OPEN);
+      if (state.currentCapsule) return transition(STATES.INCOMING_LOCKED);
+      return transition(STATES.COMPOSE);
     };
-    $("primaryBtn").onpointerup = () => {
-      if (state.resetTimer) window.clearTimeout(state.resetTimer);
-      setStatus("האיפוס בוטל.");
-    };
-    $("primaryBtn").onpointerleave = $("primaryBtn").onpointerup;
 
-    $("secondaryRow").appendChild(createButton("ביטול", "secondary-btn", () => {
-      $("primaryBtn").onpointerdown = null;
-      $("primaryBtn").onpointerup = null;
-      $("primaryBtn").onpointerleave = null;
-      if (state.currentCapsule) showScreen("incoming");
-      else showScreen(hasProfile() ? "compose" : "onboarding");
+    $("secondaryRow").appendChild(createButton("העתק קישור אחרון", "secondary-btn", async () => {
+      if (!state.latestShareText) return setStatus("אין קישור אחרון.");
+      const ok = await copyText(state.latestShareText);
+      setStatus(ok ? "הועתק." : "העתקה נחסמה.");
     }));
+  }
+
+  function renderFallback() {
+    setTitle("שיתוף", "");
+    const area = $("dynamicArea");
+    area.appendChild(createEl("div", "soft-box", "אם השיתוף לא נפתח, אפשר להעתיק ולשלוח ידנית."));
+
+    $("primaryBtn").textContent = "העתק";
+    $("primaryBtn").onclick = async () => {
+      const ok = await copyText(state.latestShareText);
+      setStatus(ok ? "הועתק." : "העתקה נחסמה.");
+    };
   }
 
   async function copyText(text) {
@@ -665,40 +808,40 @@
     }
   }
 
-  async function shareText(text) {
-    if (navigator.share) {
-      await navigator.share({ text });
-      return true;
-    }
-    await copyText(text);
-    return false;
-  }
-
   function openWhatsApp(text) {
     try {
       window.location.href = `https://wa.me/?text=${encodeURIComponent(text)}`;
       setStatus("פותח WhatsApp...");
+      window.setTimeout(() => {
+        if (state.latestShareText) transition(STATES.FALLBACK);
+      }, 900);
     } catch {
       copyText(text);
-      setStatus("לא הצלחתי לפתוח WhatsApp. הקוד הועתק.");
+      transition(STATES.FALLBACK);
+      setStatus("השיתוף נחסם. אפשר להעתיק.");
     }
   }
 
-  function parseIncomingOnLoad() {
-    try {
-      const capsule = extractCapsuleFromText(location.hash);
-      if (capsule && (capsule.v === "CM8P" || capsule.v === "CM8" || capsule.v === "SM7")) {
-        state.currentCapsule = capsule;
-        applySkin(capsule.skin || "candy");
-        if (capsule.v === "CM8P") showScreen("incoming");
-        else if (!hasProfile()) showScreen("onboarding");
-        else showScreen("incoming");
-        return true;
-      }
-    } catch {
-      setStatus("הקוד לא נפתח. יכול להיות שהקישור נחתך.");
+  function bootFromLocation() {
+    state.hasHash = Boolean(location.hash);
+    state.parseOk = false;
+    state.lastDecryptStatus = "idle";
+
+    const capsule = extractCapsuleFromText(location.hash);
+    if (capsule && (capsule.v === "CM8P" || capsule.v === "CM8" || capsule.v === "SM7")) {
+      state.currentCapsule = capsule;
+      state.parseOk = true;
+      applySkin(capsule.skin || "candy");
+      return transition(STATES.INCOMING_LOCKED);
     }
-    return false;
+
+    state.currentCapsule = null;
+    state.unlockedPlain = "";
+    state.outgoingPattern = [];
+    state.replyPattern = [];
+    state.outgoingSign = pickEmojiPassword();
+    applySkin(pickSkin());
+    return transition(STATES.COMPOSE);
   }
 
   function registerServiceWorker() {
@@ -711,9 +854,9 @@
 
   function boot() {
     applySkin("candy");
-    $("settingsBtn").addEventListener("click", () => showScreen("reset"));
-    const hasIncoming = parseIncomingOnLoad();
-    if (!hasIncoming) showScreen("compose");
+    $("settingsBtn").addEventListener("click", () => transition(STATES.SETTINGS));
+    bootFromLocation();
+    window.addEventListener("hashchange", bootFromLocation);
     registerServiceWorker();
   }
 
