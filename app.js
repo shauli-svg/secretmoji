@@ -210,7 +210,7 @@
 
     const hash = text.includes("#") ? text.split("#").pop() : text;
 
-    const cm8p = hash.match(/CM8P\\.([a-z0-9-]+)\\.([A-L]{3})\\.([A-Za-z0-9_-]+)\\.([A-Za-z0-9_-]+)\\.([A-Za-z0-9_-]+)/i);
+    const cm8p = hash.match(/CM8P\.([a-z0-9-]+)\.([A-L]{3})\.([A-Za-z0-9_-]+)\.([A-Za-z0-9_-]+)\.([A-Za-z0-9_-]+)/i);
     if (cm8p) {
       return {
         v: "CM8P",
@@ -305,8 +305,8 @@
       const count = state.pattern.length;
       const min = truth.limits.minPatternPoints;
       readout.textContent = count < min
-        ? `בחר/י לפחות ${min} נקודות — נבחרו ${count}`
-        : `הסימן מוכן: ${state.pattern.join(" → ")}`;
+        ? `×‘×—×¨/×™ ×œ×¤×—×•×ª ${min} × ×§×•×“×•×ª â€” × ×‘×—×¨×• ${count}`
+        : `×”×¡×™×ž×Ÿ ×ž×•×›×Ÿ: ${state.pattern.join(" â†’ ")}`;
     }
 
     for (let i = 1; i <= 9; i += 1) {
@@ -350,27 +350,27 @@
     resetPatternState();
     const incoming = Boolean(state.currentCapsule);
     setTitle(
-      incoming ? "קיבלת CodeMoji" : "בחר/י סימן קבוע",
+      incoming ? "×§×™×‘×œ×ª CodeMoji" : "×‘×—×¨/×™ ×¡×™×ž×Ÿ ×§×‘×•×¢",
       incoming
-        ? "כדי לפתוח, בחר/י סימן קבוע שנשמר רק במכשיר הזה."
-        : "הסימן הזה יפתח קודים במכשיר הזה. בלי חשבון ובלי הרשמה."
+        ? "×›×“×™ ×œ×¤×ª×•×—, ×‘×—×¨/×™ ×¡×™×ž×Ÿ ×§×‘×•×¢ ×©× ×©×ž×¨ ×¨×§ ×‘×ž×›×©×™×¨ ×”×–×”."
+        : "×”×¡×™×ž×Ÿ ×”×–×” ×™×¤×ª×— ×§×•×“×™× ×‘×ž×›×©×™×¨ ×”×–×”. ×‘×œ×™ ×—×©×‘×•×Ÿ ×•×‘×œ×™ ×”×¨×©×ž×”."
     );
 
     const area = $("dynamicArea");
     const note = document.createElement("div");
     note.className = "soft-box";
-    note.textContent = "לא שומרים raw pattern. נשמר רק verifier מקומי.";
+    note.textContent = "×œ× ×©×•×ž×¨×™× raw pattern. × ×©×ž×¨ ×¨×§ verifier ×ž×§×•×ž×™.";
     area.appendChild(note);
     area.appendChild(renderPatternGrid());
 
-    $("primaryBtn").textContent = incoming ? "שמור/י סימן ופתח/י" : "שמור/י סימן";
+    $("primaryBtn").textContent = incoming ? "×©×ž×•×¨/×™ ×¡×™×ž×Ÿ ×•×¤×ª×—/×™" : "×©×ž×•×¨/×™ ×¡×™×ž×Ÿ";
     $("primaryBtn").onclick = async () => {
       if (state.pattern.length < truth.limits.minPatternPoints) {
-        setStatus("צריך לפחות 4 נקודות.");
+        setStatus("×¦×¨×™×š ×œ×¤×—×•×ª 4 × ×§×•×“×•×ª.");
         return;
       }
       await saveProfile(state.pattern);
-      setStatus("הסימן נשמר במכשיר.");
+      setStatus("×”×¡×™×ž×Ÿ × ×©×ž×¨ ×‘×ž×›×©×™×¨.");
       if (state.currentCapsule) {
         await unlockWithCurrentPattern(true);
       } else {
@@ -384,7 +384,7 @@
     state.outgoingSign = pickEmojiPassword();
     applySkin(pickSkin());
 
-    setTitle("כתוב/י משהו קטן", "מסך אחד. פעולה אחת. שליחה מהירה.");
+    setTitle("×›×ª×•×‘/×™ ×ž×©×”×• ×§×˜×Ÿ", "×ž×¡×š ××—×“. ×¤×¢×•×œ×” ××—×ª. ×©×œ×™×—×” ×ž×”×™×¨×”.");
     const area = $("dynamicArea");
 
     const textarea = document.createElement("textarea");
@@ -392,7 +392,7 @@
     textarea.className = "message-input";
     textarea.maxLength = truth.limits.maxMessageChars;
     textarea.rows = 5;
-    textarea.placeholder = "משהו קצר ומסקרן...";
+    textarea.placeholder = "×ž×©×”×• ×§×¦×¨ ×•×ž×¡×§×¨×Ÿ...";
     area.appendChild(textarea);
 
     const counter = document.createElement("div");
@@ -407,7 +407,7 @@
     const sign = document.createElement("div");
     sign.className = "sign-card";
     sign.innerHTML = `
-      <span>סימן לשליחה:</span>
+      <span>×¡×™×ž×Ÿ ×œ×©×œ×™×—×”:</span>
       <strong dir="ltr">${state.outgoingSign.symbols}</strong>
       <small dir="ltr">${state.outgoingSign.words}</small>
     `;
@@ -432,15 +432,15 @@
     area.appendChild(patternNote);
     area.appendChild(renderPatternGrid());
 
-    $("primaryBtn").textContent = "צור/י קוד";
+    $("primaryBtn").textContent = "×¦×•×¨/×™ ×§×•×“";
     $("primaryBtn").onclick = async () => {
       const message = textarea.value.trim();
       if (!message) {
-        setStatus("כתוב/י הודעה קצרה לפני יצירת קוד.");
+        setStatus("×›×ª×•×‘/×™ ×”×•×“×¢×” ×§×¦×¨×” ×œ×¤× ×™ ×™×¦×™×¨×ª ×§×•×“.");
         return;
       }
       if (message.length > truth.limits.maxMessageChars) {
-        setStatus(`עד ${truth.limits.maxMessageChars} תווים.`);
+        setStatus(`×¢×“ ${truth.limits.maxMessageChars} ×ª×•×•×™×.`);
         return;
       }
       if (state.pattern.length < truth.limits.minPatternPoints) {
@@ -454,11 +454,11 @@
       showScreen("ready");
     };
 
-    $("secondaryRow").appendChild(createButton("איפוס סימן", "ghost-btn", () => showScreen("reset")));
+    $("secondaryRow").appendChild(createButton("××™×¤×•×¡ ×¡×™×ž×Ÿ", "ghost-btn", () => showScreen("reset")));
   }
 
   function renderReady() {
-    setTitle("הקוד מוכן", "שלח/י, העתיק/י, או פתח/י תצוגה מקדימה.");
+    setTitle("×”×§×•×“ ×ž×•×›×Ÿ", "×©×œ×—/×™, ×”×¢×ª×™×§/×™, ××• ×¤×ª×—/×™ ×ª×¦×•×’×” ×ž×§×“×™×ž×”.");
     const area = $("dynamicArea");
 
     const ready = document.createElement("div");
@@ -466,23 +466,23 @@
     ready.innerHTML = `
       <div class="big-sign" dir="ltr">${state.currentCapsule.ep.symbols}</div>
       <div class="words" dir="ltr">${state.currentCapsule.ep.words}</div>
-      <a class="pretty-link" href="${state.latestLink}">פתח/י את הקוד ✨</a>
+      <a class="pretty-link" href="${state.latestLink}">×¤×ª×—/×™ ××ª ×”×§×•×“ âœ¨</a>
       <textarea id="rawLinkBox" class="raw-link hidden" readonly>${state.latestShareText}</textarea>
     `;
     area.appendChild(ready);
 
-    $("primaryBtn").textContent = "שלח/י בוואטסאפ";
+    $("primaryBtn").textContent = "×©×œ×—/×™ ×‘×•×•××˜×¡××¤";
     $("primaryBtn").onclick = () => openWhatsApp(state.latestShareText);
 
     $("secondaryRow").appendChild(createButton("Copy", "secondary-btn", async () => {
       const ok = await copyText(state.latestShareText);
-      setStatus(ok ? "הקוד הועתק." : "הדפדפן חסם העתקה. הצגתי קישור ידני.");
+      setStatus(ok ? "×”×§×•×“ ×”×•×¢×ª×§." : "×”×“×¤×“×¤×Ÿ ×—×¡× ×”×¢×ª×§×”. ×”×¦×’×ª×™ ×§×™×©×•×¨ ×™×“× ×™.");
       if (!ok) $("rawLinkBox").classList.remove("hidden");
     }));
 
     $("secondaryRow").appendChild(createButton("Share", "secondary-btn", async () => {
       const shared = await shareText(state.latestShareText);
-      setStatus(shared ? "חלון השיתוף נפתח." : "שיתוף לא זמין כאן. הקוד הועתק.");
+      setStatus(shared ? "×—×œ×•×Ÿ ×”×©×™×ª×•×£ × ×¤×ª×—." : "×©×™×ª×•×£ ×œ× ×–×ž×™×Ÿ ×›××Ÿ. ×”×§×•×“ ×”×•×¢×ª×§.");
     }));
 
     $("secondaryRow").appendChild(createButton("Preview", "ghost-btn", () => {
@@ -493,7 +493,7 @@
       }
     }));
 
-    $("secondaryRow").appendChild(createButton("הצג קישור", "ghost-btn", () => {
+    $("secondaryRow").appendChild(createButton("×”×¦×’ ×§×™×©×•×¨", "ghost-btn", () => {
       $("rawLinkBox").classList.toggle("hidden");
     }));
   }
@@ -503,36 +503,36 @@
     const capsule = state.currentCapsule;
     applySkin(capsule?.skin || "candy");
 
-    setTitle("קיבלת CodeMoji", "צייר/י את הסימן שלך כדי לפתוח לקריאה.");
+    setTitle("×§×™×‘×œ×ª CodeMoji", "×¦×™×™×¨/×™ ××ª ×”×¡×™×ž×Ÿ ×©×œ×š ×›×“×™ ×œ×¤×ª×•×— ×œ×§×¨×™××”.");
     const area = $("dynamicArea");
 
     const visible = document.createElement("div");
     visible.className = "sign-card incoming-sign";
     visible.innerHTML = `
-      <span>הסימן שקיבלת:</span>
+      <span>×”×¡×™×ž×Ÿ ×©×§×™×‘×œ×ª:</span>
       <strong dir="ltr">${capsule.ep.symbols}</strong>
       <small dir="ltr">${capsule.ep.words}</small>
     `;
     area.appendChild(visible);
     area.appendChild(renderPatternGrid());
 
-    $("primaryBtn").textContent = "פתח/י";
+    $("primaryBtn").textContent = "×¤×ª×—/×™";
     $("primaryBtn").onclick = () => unlockWithCurrentPattern(false);
 
-    $("secondaryRow").appendChild(createButton("שכחתי סימן", "ghost-btn", () => showScreen("reset")));
+    $("secondaryRow").appendChild(createButton("×©×›×—×ª×™ ×¡×™×ž×Ÿ", "ghost-btn", () => showScreen("reset")));
   }
 
   async function unlockWithCurrentPattern(profileJustCreated) {
     if (!state.currentCapsule) return;
     if (state.pattern.length < truth.limits.minPatternPoints) {
-      setStatus("צריך לפחות 4 נקודות.");
+      setStatus("×¦×¨×™×š ×œ×¤×—×•×ª 4 × ×§×•×“×•×ª.");
       return;
     }
 
     if (!profileJustCreated && state.currentCapsule.v !== "CM8P") {
       const ok = await verifyPattern(state.pattern);
       if (!ok) {
-        setStatus("הסימן לא תואם למכשיר הזה.");
+        setStatus("×”×¡×™×ž×Ÿ ×œ× ×ª×•×× ×œ×ž×›×©×™×¨ ×”×–×”.");
         return;
       }
     }
@@ -542,22 +542,22 @@
       state.unlockedPlain = plain;
       showScreen("read");
     } catch {
-      setStatus("הקוד לא נפתח. יכול להיות שהקישור נחתך.");
+      setStatus("×”×§×•×“ ×œ× × ×¤×ª×—. ×™×›×•×œ ×œ×”×™×•×ª ×©×”×§×™×©×•×¨ × ×—×ª×š.");
     }
   }
 
   function renderRead() {
-    setTitle("נפתח", "ההודעה לקריאה בלבד. אפשר להשיב בקוד.");
+    setTitle("× ×¤×ª×—", "×”×”×•×“×¢×” ×œ×§×¨×™××” ×‘×œ×‘×“. ××¤×©×¨ ×œ×”×©×™×‘ ×‘×§×•×“.");
     const area = $("dynamicArea");
     const msg = document.createElement("article");
     msg.className = "plain-message";
     msg.textContent = state.unlockedPlain || "";
     area.appendChild(msg);
 
-    $("primaryBtn").textContent = "השב/י בקוד";
+    $("primaryBtn").textContent = "×”×©×‘/×™ ×‘×§×•×“";
     $("primaryBtn").onclick = () => showScreen("reply");
 
-    $("secondaryRow").appendChild(createButton("צור/י חדש", "secondary-btn", () => {
+    $("secondaryRow").appendChild(createButton("×¦×•×¨/×™ ×—×“×©", "secondary-btn", () => {
       state.currentCapsule = null;
       state.unlockedPlain = "";
       showScreen("compose");
@@ -569,7 +569,7 @@
     state.outgoingSign = pickEmojiPassword();
     applySkin(pickSkin());
 
-    setTitle("כתוב/י תשובה", "תשובה קצרה שחוזרת לאותו לופ.");
+    setTitle("×›×ª×•×‘/×™ ×ª×©×•×‘×”", "×ª×©×•×‘×” ×§×¦×¨×” ×©×—×•×–×¨×ª ×œ××•×ª×• ×œ×•×¤.");
     const area = $("dynamicArea");
 
     const textarea = document.createElement("textarea");
@@ -577,7 +577,7 @@
     textarea.className = "message-input";
     textarea.maxLength = truth.limits.maxMessageChars;
     textarea.rows = 5;
-    textarea.placeholder = "תשובה קצרה...";
+    textarea.placeholder = "×ª×©×•×‘×” ×§×¦×¨×”...";
     area.appendChild(textarea);
 
     const patternNote = document.createElement("div");
@@ -586,11 +586,11 @@
     area.appendChild(patternNote);
     area.appendChild(renderPatternGrid());
 
-    $("primaryBtn").textContent = "שלח/י חזרה";
+    $("primaryBtn").textContent = "×©×œ×—/×™ ×—×–×¨×”";
     $("primaryBtn").onclick = async () => {
       const message = textarea.value.trim();
       if (!message) {
-        setStatus("כתוב/י תשובה קצרה.");
+        setStatus("×›×ª×•×‘/×™ ×ª×©×•×‘×” ×§×¦×¨×”.");
         return;
       }
       if (state.pattern.length < truth.limits.minPatternPoints) {
@@ -604,25 +604,25 @@
       showScreen("ready");
     };
 
-    $("secondaryRow").appendChild(createButton("חזרה", "ghost-btn", () => showScreen("read")));
+    $("secondaryRow").appendChild(createButton("×—×–×¨×”", "ghost-btn", () => showScreen("read")));
   }
 
   function renderReset() {
     resetPatternState();
-    setTitle("איפוס סימן", "איפוס ימחק את הסימן מהמכשיר הזה. קודים ישנים עלולים לא להיפתח.");
+    setTitle("××™×¤×•×¡ ×¡×™×ž×Ÿ", "××™×¤×•×¡ ×™×ž×—×§ ××ª ×”×¡×™×ž×Ÿ ×ž×”×ž×›×©×™×¨ ×”×–×”. ×§×•×“×™× ×™×©× ×™× ×¢×œ×•×œ×™× ×œ× ×œ×”×™×¤×ª×—.");
     const area = $("dynamicArea");
 
     const warning = document.createElement("div");
     warning.className = "danger-box";
-    warning.textContent = "לחיצה ארוכה של 3 שניות תאפס את הסימן המקומי.";
+    warning.textContent = "×œ×—×™×¦×” ××¨×•×›×” ×©×œ 3 ×©× ×™×•×ª ×ª××¤×¡ ××ª ×”×¡×™×ž×Ÿ ×”×ž×§×•×ž×™.";
     area.appendChild(warning);
 
-    $("primaryBtn").textContent = "לחיצה ארוכה לאיפוס";
+    $("primaryBtn").textContent = "×œ×—×™×¦×” ××¨×•×›×” ×œ××™×¤×•×¡";
     $("primaryBtn").onpointerdown = () => {
-      setStatus("מחזיק... 3 שניות");
+      setStatus("×ž×—×–×™×§... 3 ×©× ×™×•×ª");
       state.resetTimer = window.setTimeout(() => {
         clearProfile();
-        setStatus("הסימן אופס. בחר/י סימן חדש.");
+        setStatus("×”×¡×™×ž×Ÿ ××•×¤×¡. ×‘×—×¨/×™ ×¡×™×ž×Ÿ ×—×“×©.");
         $("primaryBtn").onpointerdown = null;
         $("primaryBtn").onpointerup = null;
         showScreen("onboarding");
@@ -630,11 +630,11 @@
     };
     $("primaryBtn").onpointerup = () => {
       if (state.resetTimer) window.clearTimeout(state.resetTimer);
-      setStatus("האיפוס בוטל.");
+      setStatus("×”××™×¤×•×¡ ×‘×•×˜×œ.");
     };
     $("primaryBtn").onpointerleave = $("primaryBtn").onpointerup;
 
-    $("secondaryRow").appendChild(createButton("ביטול", "secondary-btn", () => {
+    $("secondaryRow").appendChild(createButton("×‘×™×˜×•×œ", "secondary-btn", () => {
       $("primaryBtn").onpointerdown = null;
       $("primaryBtn").onpointerup = null;
       $("primaryBtn").onpointerleave = null;
@@ -677,10 +677,10 @@
   function openWhatsApp(text) {
     try {
       window.location.href = `https://wa.me/?text=${encodeURIComponent(text)}`;
-      setStatus("פותח WhatsApp...");
+      setStatus("×¤×•×ª×— WhatsApp...");
     } catch {
       copyText(text);
-      setStatus("לא הצלחתי לפתוח WhatsApp. הקוד הועתק.");
+      setStatus("×œ× ×”×¦×œ×—×ª×™ ×œ×¤×ª×•×— WhatsApp. ×”×§×•×“ ×”×•×¢×ª×§.");
     }
   }
 
@@ -696,7 +696,7 @@
         return true;
       }
     } catch {
-      setStatus("הקוד לא נפתח. יכול להיות שהקישור נחתך.");
+      setStatus("×”×§×•×“ ×œ× × ×¤×ª×—. ×™×›×•×œ ×œ×”×™×•×ª ×©×”×§×™×©×•×¨ × ×—×ª×š.");
     }
     return false;
   }
