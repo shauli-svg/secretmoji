@@ -1,0 +1,15 @@
+{
+  "name": "SecretMoji",
+  "short_name": "SecretMoji",
+  "start_url": "./?v=v7-simple-20260512-02",
+  "scope": "./",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone", "minimal-ui", "browser"],
+  "orientation": "portrait",
+  "background_color": "#fff6d8",
+  "theme_color": "#7c5cff",
+  "description": "Tiny secret messages that open with a personal sign.",
+  "icons": [
+    { "src": "assets/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

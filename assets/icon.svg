@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="g" x1="70" y1="38" x2="455" y2="470" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#72f7ff"/>
+      <stop offset=".46" stop-color="#ff4fd8"/>
+      <stop offset="1" stop-color="#ffd166"/>
+    </linearGradient>
+    <filter id="s" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="22" stdDeviation="18" flood-opacity=".38"/></filter>
+  </defs>
+  <rect width="512" height="512" rx="120" fill="#15082f"/>
+  <circle cx="122" cy="122" r="54" fill="#72f7ff" opacity=".20"/>
+  <circle cx="394" cy="118" r="68" fill="#ff4fd8" opacity=".18"/>
+  <circle cx="390" cy="392" r="76" fill="#ffd166" opacity=".16"/>
+  <path filter="url(#s)" d="M134 238c0-67 55-122 122-122s122 55 122 122v38h18c21 0 38 17 38 38v70c0 21-17 38-38 38H116c-21 0-38-17-38-38v-70c0-21 17-38 38-38h18v-38zm67 38h110v-38c0-31-24-55-55-55s-55 24-55 55v38z" fill="url(#g)"/>
+  <circle cx="210" cy="350" r="17" fill="#15082f"/>
+  <circle cx="256" cy="350" r="17" fill="#15082f"/>
+  <circle cx="302" cy="350" r="17" fill="#15082f"/>
+</svg>

@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SecretMoji reset</title>
+  <style>
+    body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;min-height:100svh;display:grid;place-items:center;margin:0;background:#fff6d8;color:#2b2150}
+    .card{max-width:420px;margin:20px;padding:24px;border-radius:28px;background:rgba(255,255,255,.72);box-shadow:0 24px 70px rgba(124,92,255,.22);text-align:center}
+    .pill{display:inline-block;padding:8px 12px;border-radius:999px;background:#dff7ee;color:#135f46;font-weight:800}
+  </style>
+</head>
+<body>
+  <main class="card">
+    <div class="pill">SecretMoji reset</div>
+    <h1>מנקה גרסה ישנה...</h1>
+    <p>עוד רגע נפתח את הגרסה הנקייה.</p>
+  </main>
+  <script>
+    (async () => {
+      try {
+        if ('serviceWorker' in navigator) {
+          const regs = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(regs.map((r) => r.unregister()));
+        }
+        if ('caches' in window) {
+          const keys = await caches.keys();
+          await Promise.all(keys.map((k) => caches.delete(k)));
+        }
+      } catch (e) {}
+      location.replace('./?v=v7-simple-20260512-02&reset=1');
+    })();
+  </script>
+</body>
+</html>
