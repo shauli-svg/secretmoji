@@ -99,22 +99,42 @@
     return crypto.subtle.importKey("raw", rawKeyBytes, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
   }
 
-  async function encryptWithRandomCapsuleKey(plainText) {
-    const keyBytes = randomBytes(32);
+  async function deriveMessageKeyFromPattern(pattern, saltB64) {
+    const salt = base64UrlToBytes(saltB64);
+    const patternMaterial = pattern.join("-");
+    const raw = await crypto.subtle.importKey("raw", encoder.encode(patternMaterial), "PBKDF2", false, ["deriveBits"]);
+    const bits = await crypto.subtle.deriveBits({
+      name: "PBKDF2",
+      salt,
+      iterations: truth.limits.pbkdf2Iterations,
+      hash: "SHA-256"
+    }, raw, 256);
+    return importAesKey(new Uint8Array(bits));
+  }
+
+  async function encryptWithPatternKey(plainText, pattern) {
+    const salt = bytesToBase64Url(randomBytes(16));
     const iv = randomBytes(12);
-    const key = await importAesKey(keyBytes);
+    const key = await deriveMessageKeyFromPattern(pattern, salt);
     const cipher = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, encoder.encode(plainText));
     return {
-      key: bytesToBase64Url(keyBytes),
+      salt,
       iv: bytesToBase64Url(iv),
       cipher: bytesToBase64Url(new Uint8Array(cipher))
     };
   }
 
-  async function decryptCapsule(capsule) {
-    const key = await importAesKey(base64UrlToBytes(capsule.k));
+  async function decryptCapsule(capsule, pattern) {
     const iv = base64UrlToBytes(capsule.iv);
     const cipher = base64UrlToBytes(capsule.c);
+
+    if (capsule.k) {
+      const legacyKey = await importAesKey(base64UrlToBytes(capsule.k));
+      const legacyPlain = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, legacyKey, cipher);
+      return decoder.decode(legacyPlain);
+    }
+
+    const key = await deriveMessageKeyFromPattern(pattern, capsule.salt);
     const plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, cipher);
     return decoder.decode(plain);
   }
@@ -174,7 +194,7 @@
       VERSION,
       capsule.skin || "candy",
       capsule.ep.codes,
-      capsule.k,
+      capsule.salt,
       capsule.iv,
       capsule.c
     ].join(".");
@@ -189,6 +209,19 @@
     if (!text) return null;
 
     const hash = text.includes("#") ? text.split("#").pop() : text;
+
+    const cm8p = hash.match(/CM8P\\.([a-z0-9-]+)\\.([A-L]{3})\\.([A-Za-z0-9_-]+)\\.([A-Za-z0-9_-]+)\\.([A-Za-z0-9_-]+)/i);
+    if (cm8p) {
+      return {
+        v: "CM8P",
+        type: "pattern-bound-capsule",
+        skin: cm8p[1].toLowerCase(),
+        ep: emojiPasswordFromCodes(cm8p[2].toUpperCase()),
+        salt: cm8p[3],
+        iv: cm8p[4],
+        c: cm8p[5]
+      };
+    }
 
     const cm8 = hash.match(/CM8\.([a-z0-9-]+)\.([A-L]{3})\.([A-Za-z0-9_-]+)\.([A-Za-z0-9_-]+)\.([A-Za-z0-9_-]+)/i);
     if (cm8) {
@@ -228,16 +261,16 @@
       .replace("{link}", link);
   }
 
-  async function makeCapsule(message) {
-    const encrypted = await encryptWithRandomCapsuleKey(message);
+  async function makeCapsule(message, pattern) {
+    const encrypted = await encryptWithPatternKey(message, pattern);
     const ep = state.outgoingSign || pickEmojiPassword();
     const skin = state.currentSkin || pickSkin();
     return {
       v: VERSION,
-      type: "codemoji-capsule",
+      type: "pattern-bound-capsule",
       skin,
       ep,
-      k: encrypted.key,
+      salt: encrypted.salt,
       iv: encrypted.iv,
       c: encrypted.c
     };
@@ -347,6 +380,7 @@
   }
 
   function renderCompose() {
+    resetPatternState();
     state.outgoingSign = pickEmojiPassword();
     applySkin(pickSkin());
 
@@ -392,6 +426,12 @@
     }
     area.appendChild(skinRow);
 
+    const patternNote = document.createElement("div");
+    patternNote.className = "soft-box";
+    patternNote.textContent = "Draw a shared 3x3 sign. This sign derives the encryption key.";
+    area.appendChild(patternNote);
+    area.appendChild(renderPatternGrid());
+
     $("primaryBtn").textContent = "צור/י קוד";
     $("primaryBtn").onclick = async () => {
       const message = textarea.value.trim();
@@ -403,7 +443,11 @@
         setStatus(`עד ${truth.limits.maxMessageChars} תווים.`);
         return;
       }
-      const capsule = await makeCapsule(message);
+      if (state.pattern.length < truth.limits.minPatternPoints) {
+        setStatus("Draw a sign of at least 4 points.");
+        return;
+      }
+      const capsule = await makeCapsule(message, state.pattern);
       state.latestShareText = buildShareText(capsule);
       state.latestLink = capsuleToLink(capsule);
       state.currentCapsule = capsule;
@@ -485,7 +529,7 @@
       return;
     }
 
-    if (!profileJustCreated) {
+    if (!profileJustCreated && state.currentCapsule.v !== "CM8P") {
       const ok = await verifyPattern(state.pattern);
       if (!ok) {
         setStatus("הסימן לא תואם למכשיר הזה.");
@@ -494,7 +538,7 @@
     }
 
     try {
-      const plain = await decryptCapsule(state.currentCapsule);
+      const plain = await decryptCapsule(state.currentCapsule, state.pattern);
       state.unlockedPlain = plain;
       showScreen("read");
     } catch {
@@ -521,6 +565,7 @@
   }
 
   function renderReply() {
+    resetPatternState();
     state.outgoingSign = pickEmojiPassword();
     applySkin(pickSkin());
 
@@ -535,6 +580,12 @@
     textarea.placeholder = "תשובה קצרה...";
     area.appendChild(textarea);
 
+    const patternNote = document.createElement("div");
+    patternNote.className = "soft-box";
+    patternNote.textContent = "Draw a sign for the encrypted reply.";
+    area.appendChild(patternNote);
+    area.appendChild(renderPatternGrid());
+
     $("primaryBtn").textContent = "שלח/י חזרה";
     $("primaryBtn").onclick = async () => {
       const message = textarea.value.trim();
@@ -542,7 +593,11 @@
         setStatus("כתוב/י תשובה קצרה.");
         return;
       }
-      const capsule = await makeCapsule(message);
+      if (state.pattern.length < truth.limits.minPatternPoints) {
+        setStatus("Draw a sign of at least 4 points.");
+        return;
+      }
+      const capsule = await makeCapsule(message, state.pattern);
       state.latestShareText = buildShareText(capsule);
       state.latestLink = capsuleToLink(capsule);
       state.currentCapsule = capsule;
@@ -632,10 +687,11 @@
   function parseIncomingOnLoad() {
     try {
       const capsule = extractCapsuleFromText(location.hash);
-      if (capsule && (capsule.v === "CM8" || capsule.v === "SM7")) {
+      if (capsule && (capsule.v === "CM8P" || capsule.v === "CM8" || capsule.v === "SM7")) {
         state.currentCapsule = capsule;
         applySkin(capsule.skin || "candy");
-        if (!hasProfile()) showScreen("onboarding");
+        if (capsule.v === "CM8P") showScreen("incoming");
+        else if (!hasProfile()) showScreen("onboarding");
         else showScreen("incoming");
         return true;
       }
@@ -657,7 +713,7 @@
     applySkin("candy");
     $("settingsBtn").addEventListener("click", () => showScreen("reset"));
     const hasIncoming = parseIncomingOnLoad();
-    if (!hasIncoming) showScreen(hasProfile() ? "compose" : "onboarding");
+    if (!hasIncoming) showScreen("compose");
     registerServiceWorker();
   }
 

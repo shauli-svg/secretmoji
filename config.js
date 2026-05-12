@@ -1,11 +1,11 @@
-/* CodeMoji Source of Truth - CM8 single card mobile loop.
+/* CodeMoji Source of Truth - CM8P pattern-bound single card loop.
    ASCII-only source file. Hebrew UI lives in app/html.
 */
 window.CodeMojiTruth = {
-  version: "CM8",
-  productMode: "single-card-mobile-loop",
+  version: "CM8P",
+  productMode: "single-card-pattern-bound-loop",
   publicBaseUrl: "https://shauli-svg.github.io/secretmoji/",
-  storagePrefix: "codemoji.cm8.",
+  storagePrefix: "codemoji.cm8p.",
   limits: {
     maxMessageChars: 120,
     minPatternPoints: 4,

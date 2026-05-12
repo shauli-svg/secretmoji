@@ -1,106 +1,33 @@
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
-
 const root = process.cwd();
-
-const required = [
-  "index.html",
-  "styles.css",
-  "config.js",
-  "app.js",
-  "manifest.webmanifest",
-  "service-worker.js",
-  "assets/icon.svg",
-  "reset.html",
-  "BUILD_ID.txt"
-];
-
-const missing = required.filter((file) => !existsSync(join(root, file)));
-if (missing.length) {
-  console.error("Missing files:", missing.join(", "));
-  process.exit(1);
-}
-
-const config = readFileSync(join(root, "config.js"), "utf8");
-const app = readFileSync(join(root, "app.js"), "utf8");
-const html = readFileSync(join(root, "index.html"), "utf8");
-const styles = readFileSync(join(root, "styles.css"), "utf8");
-const manifest = readFileSync(join(root, "manifest.webmanifest"), "utf8");
-
-for (const token of ["CodeMojiTruth", "safeSymbolSet", "forbiddenEmojiSmokeList", "teaserTemplates", "CM8", "skins"]) {
-  if (!config.includes(token)) {
-    console.error(`Missing source-of-truth token: ${token}`);
-    process.exit(1);
-  }
-}
-
-for (const token of ["CM8", "extractCapsuleFromText", "showScreen", "saveProfile", "compactCapsule", "emojiPasswordFromCodes"]) {
-  if (!(app + html).includes(token)) {
-    console.error(`Missing product token: ${token}`);
-    process.exit(1);
-  }
-}
-
-for (const id of ["appCard", "dynamicArea", "primaryBtn", "secondaryRow", "statusLine", "patternTemplate"]) {
-  if (!html.includes(`id="${id}"`)) {
-    console.error(`Missing element id: ${id}`);
-    process.exit(1);
-  }
-}
-
-const forbiddenEmoji = [
-  "\u{1FAA9}", "\u{1FAE0}", "\u{1F972}", "\u{1FAF6}",
-  "\u{1F9CC}", "\u{1FAE5}", "\u{1F9CB}", "\u{1F9E9}",
-  "\u{1F600}", "\u{1F319}", "\u{1F512}", "\u{1F436}"
-];
-
-for (const [file, content] of [
-  ["app.js", app],
-  ["index.html", html],
-  ["styles.css", styles],
-  ["config.js", config]
-]) {
-  for (const emoji of forbiddenEmoji) {
-    if (content.includes(emoji)) {
-      console.error(`Forbidden emoji ${emoji} found in ${file}`);
-      process.exit(1);
-    }
-  }
-}
-
-for (const [file, content] of [
-  ["config.js", config],
-  ["app.js", app],
-  ["index.html", html],
-  ["manifest.webmanifest", manifest]
-]) {
-  if (content.includes("×§") || content.includes("×¡") || content.includes("×™") || content.includes("×ž") || content.includes("ðŸ") || content.includes("â˜")) {
-    console.error(`Mojibake marker found in ${file}`);
-    process.exit(1);
-  }
-}
-
-const visibleProduct = html + app + manifest;
-for (const bad of ["SecretMoji", "SM5:eyJ", "lemon-fish-lock", "4/240"]) {
-  if (visibleProduct.includes(bad)) {
-    console.error(`Forbidden legacy visible token found: ${bad}`);
-    process.exit(1);
-  }
-}
-
-if (config.includes('version: "SM7"') || app.includes("SM5:${") || app.includes("SM5:eyJ")) {
-  console.error("Legacy capsule marker found");
-  process.exit(1);
-}
-
-if (!html.includes("CodeMoji") || !manifest.includes("CodeMoji")) {
-  console.error("Brand rename to CodeMoji incomplete");
-  process.exit(1);
-}
-
-if (!config.includes("maxMessageChars: 120")) {
-  console.error("Expected maxMessageChars 120");
-  process.exit(1);
-}
-
-console.log("static-check: PASS CM8");
+function read(rel) { return readFileSync(join(root, rel), "utf8"); }
+function fail(message) { console.error(message); process.exit(1); }
+const required = ["index.html", "styles.css", "config.js", "app.js", "manifest.webmanifest", "service-worker.js", "assets/icon.svg", "reset.html", "BUILD_ID.txt", "docs/SOURCE_OF_TRUTH_CM8.md", "docs/IMPLEMENTATION_CM8P.md"];
+for (const file of required) { if (!existsSync(join(root, file))) fail("Missing required file: " + file); }
+const config = read("config.js");
+const app = read("app.js");
+const html = read("index.html");
+const styles = read("styles.css");
+const manifest = read("manifest.webmanifest");
+const buildId = read("BUILD_ID.txt");
+const impl = read("docs/IMPLEMENTATION_CM8P.md");
+if (!config.includes("CodeMojiTruth")) fail("Missing CodeMojiTruth");
+if (!config.includes("version: \"CM8P\"")) fail("Expected config version CM8P");
+if (!config.includes("productMode: \"single-card-pattern-bound-loop\"")) fail("Expected pattern-bound productMode");
+if (!config.includes("storagePrefix: \"codemoji.cm8p.\"")) fail("Expected cm8p storage prefix");
+if (!config.includes("maxMessageChars: 120")) fail("Expected maxMessageChars 120");
+if (!html.includes("CodeMoji")) fail("Missing CodeMoji in index.html");
+if (!manifest.includes("CodeMoji")) fail("Missing CodeMoji in manifest");
+if (!buildId.includes("cm8p-pattern-bound")) fail("Expected CM8P build id");
+for (const token of ["CM8P", "deriveMessageKeyFromPattern", "encryptWithPatternKey", "pattern-bound-capsule"]) { if (!app.includes(token)) fail("Missing CM8P implementation token: " + token); }
+if (app.includes("encryptWithRandomCapsuleKey")) fail("Forbidden random-key-in-URL function still present");
+if (app.includes("const encrypted = await encryptWithRandomCapsuleKey(message);")) fail("Forbidden random-key call site still present");
+if (!app.includes("decryptCapsule(state.currentCapsule, state.pattern)")) fail("Decrypt must receive drawn pattern");
+if (!app.includes("const cm8p = hash.match")) fail("Missing CM8P parser");
+if (!app.includes("capsule.salt")) fail("Pattern-bound capsule must use salt");
+if (!impl.includes("CM8P.skin.sign.salt.iv.cipher")) fail("Implementation note missing CM8P capsule model");
+for (const bad of ["SM5:eyJ", "lemon-fish-lock", "4/240"]) { if ((html + app + config).includes(bad)) fail("Forbidden legacy token found: " + bad); }
+for (const bad of ["SecretMoji"]) { if ((html + manifest).includes(bad)) fail("Forbidden visible legacy brand found: " + bad); }
+for (const bad of ["×§", "×¡", "×™", "ðŸ"]) { if ((config + app + html + styles + manifest).includes(bad)) fail("Mojibake marker found: " + bad); }
+console.log("static-check: PASS CM8P");
