@@ -3,141 +3,63 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="secretmoji-build" content="v7-rebuild-20260512-123143" />
-  <title>SecretMoji — Simple Mobile Popup</title>
-  <meta name="description" content="SecretMoji — הודעה סודית קטנה שנפתחת עם סימן אישי." />
-  <meta name="theme-color" content="#20114f" />
+  <title>CodeMoji — קוד קטן שנפתח עם הסימן שלך</title>
+  <meta name="description" content="CodeMoji — הודעה קטנה לחברים סקרנים שנפתחת עם סימן אישי במכשיר." />
+  <meta name="theme-color" content="#fff6d8" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-title" content="SecretMoji" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <link rel="manifest" href="manifest.webmanifest?v=v7-simple-20260512-02" />
+  <meta name="apple-mobile-web-app-title" content="CodeMoji" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <link rel="manifest" href="manifest.webmanifest?v=cm8-single-card-20260512-134925" />
   <link rel="icon" href="assets/icon.svg" type="image/svg+xml" />
-<link rel="apple-touch-icon" href="assets/icon.svg" />
-  <link rel="stylesheet" href="styles.css?v=v7-simple-20260512-02" />
-  <script defer src="config.js?v=v7-simple-20260512-02"></script>
-  <script defer src="app.js?v=v7-simple-20260512-02"></script>
+  <link rel="apple-touch-icon" href="assets/icon.svg" />
+  <link rel="stylesheet" href="styles.css?v=cm8-single-card-20260512-134925" />
+  <script defer src="config.js?v=cm8-single-card-20260512-134925"></script>
+  <script defer src="app.js?v=cm8-single-card-20260512-134925"></script>
 </head>
 <body>
   <div class="ambient" aria-hidden="true">
-    <span class="orb orb-a"></span>
-    <span class="orb orb-b"></span>
-    <span class="orb orb-c"></span>
+    <span class="bubble bubble-a"></span>
+    <span class="bubble bubble-b"></span>
+    <span class="bubble bubble-c"></span>
   </div>
 
   <main id="mainApp" class="app-shell">
-    <header class="hero glass">
-      <div class="brand">
-        <img src="assets/icon.svg" class="logo" alt="SecretMoji" />
-        <div>
-          <p class="eyebrow">simple mobile secret</p>
-          <h1>SecretMoji</h1>
-          <p class="tagline">כתוב/י משהו קצר. הצד השני לוחץ, מצייר סימן, וקורא.</p>
+    <section id="appCard" class="codemoji-card glass" aria-live="polite">
+      <header class="card-head">
+        <div class="brand-line">
+          <img src="assets/icon.svg" class="logo" alt="CodeMoji" />
+          <div>
+            <p class="eyebrow">CM8 · single card loop</p>
+            <h1>CodeMoji</h1>
+          </div>
         </div>
-      </div>
-      <div class="status-chip" id="runtimeChip">Simple mobile popup</div>
-<div id="installHint" class="install-hint">במובייל: Add to Home Screen נותן פתיחה בלי תחושת דפדפן</div>
-    </header>
+        <button id="settingsBtn" class="mini-btn" type="button" aria-label="איפוס סימן">⋯</button>
+      </header>
 
-    <section class="composer glass">
-      <div class="step-title">
-        <span>1</span>
-        <h2>כתוב/י הודעה סודית</h2>
-      </div>
-      <textarea id="messageInput" class="message-input" maxlength="120" rows="5" placeholder="משהו קצר ומסקרן..."></textarea>
-      <div class="counter"><span id="charCount">0</span>/120</div>
-
-      <div class="step-title compact">
-        <span>2</span>
-        <h2>סיסמת סמלים גלויה</h2>
-      </div>
-      <p class="microcopy">טיזר קטן לפני הקישור. פשוט, משחקי, בלי בלוק טכני.</p>
-      <div class="emoji-password-card">
-        <button id="refreshEmojiPassword" class="icon-btn" type="button" aria-label="רענון סיסמת אימוג׳ים">↻</button>
-        <div>
-          <p class="label">Emoji Password</p>
-          <div id="emojiPassword" class="emoji-password" dir="ltr"></div>
-          <div id="emojiPasswordWords" class="emoji-words" dir="ltr"></div>
-        </div>
+      <div class="card-copy">
+        <h2 id="cardTitle">קוד קטן שנפתח עם הסימן שלך</h2>
+        <p id="cardSubtitle">כתוב/י משהו קצר, צור/י קוד, ושלח/י בוואטסאפ.</p>
       </div>
 
-      <div class="step-title compact">
-        <span>3</span>
-        <h2>צור/י קפסולה</h2>
-      </div>
-      <button id="makeCapsuleBtn" class="primary-btn" type="button">Make SecretMoji</button>
+      <div id="dynamicArea" class="dynamic-area"></div>
+
+      <button id="primaryBtn" class="primary-btn wide" type="button">התחלה</button>
+
+      <div id="secondaryRow" class="secondary-row"></div>
+
+      <div id="statusLine" class="status-line"></div>
     </section>
 
-    <section id="sharePanel" class="share-panel glass hidden" aria-live="polite">
-      <h2>הקפסולה מוכנה</h2>
-      <p class="microcopy">הטיזר קצר. הקישור קומפקטי ככל שאפשר בלי שרת.</p>
-      <textarea id="shareText" class="share-text" rows="7" readonly></textarea>
-      <div class="actions-grid">
-        <button id="copyBtn" class="secondary-btn" type="button">Copy</button>
-        <button id="shareBtn" class="secondary-btn" type="button">Share</button>
-        <button id="whatsappBtn" class="whatsapp-btn" type="button">Send on WhatsApp</button>
-      </div>
-      <div id="shareStatus" class="soft-status"></div>
-    </section>
-
-    <section class="decode-entry glass">
-      <h2>קיבלת קפסולה?</h2>
-      <p class="microcopy">פתח/י את הלינק. אם קיבלת קוד ידני, אפשר להדביק כאן.</p>
-      <textarea id="manualCapsule" class="message-input small" rows="3" placeholder="SM5:..."></textarea>
-      <button id="manualOpenBtn" class="secondary-btn wide" type="button">Open as popup</button>
-    </section>
+    <p class="footer-note">
+      בלי חשבון. בלי התקנה. הסימן נשמר רק במכשיר הזה.
+    </p>
   </main>
 
-  <div id="popupLayer" class="popup-layer hidden" role="dialog" aria-modal="true" aria-labelledby="popupTitle">
-    <div class="phone-backdrop" aria-hidden="true">
-      <div class="fake-chat-card">WhatsApp / Telegram stays behind the moment</div>
+  <template id="patternTemplate">
+    <div class="pattern-wrap">
+      <div class="pattern-grid" data-pattern-grid></div>
+      <div class="pattern-readout" data-pattern-readout>בחר/י לפחות 4 נקודות</div>
     </div>
-    <section class="popup-card glass-strong">
-      <button id="closePopup" class="close-btn" type="button" aria-label="סגור">×</button>
-      <div class="popup-head">
-        <img src="assets/icon.svg" class="popup-logo" alt="" />
-        <div>
-          <p class="eyebrow" id="popupMode">popup capsule</p>
-          <h2 id="popupTitle">קיבלת SecretMoji</h2>
-        </div>
-      </div>
-
-      <div id="onboardingView" class="popup-view">
-        <p class="lead">מישהו שלח לך סוד קטן. צייר/י סימן ופתח/י.</p>
-        <div class="visible-password">
-          <span>הסימן שקיבלת:</span>
-          <strong id="incomingEmojiPassword" dir="ltr"></strong>
-          <small id="incomingEmojiWords" dir="ltr"></small>
-        </div>
-        <p class="microcopy">הסימן נשמר רק במכשיר הזה. בלי חשבון ובלי התקנה.</p>
-        <div id="unlockPattern" class="pattern-grid" aria-label="Secret pattern grid"></div>
-        <div id="patternReadout" class="pattern-readout">בחר/י לפחות 4 נקודות</div>
-        <button id="unlockBtn" class="primary-btn wide" type="button">Open my secret</button>
-        <button id="resetPatternBtn" class="ghost-btn wide" type="button">Reset pattern</button>
-      </div>
-
-      <div id="messageView" class="popup-view hidden">
-        <p class="label">Message unlocked</p>
-        <article id="plainMessage" class="plain-message" readonly></article>
-        <div class="actions-grid single-row">
-          <button id="replyBtn" class="primary-btn" type="button">Reply secretly</button>
-          <button id="makeMineBtn" class="secondary-btn" type="button">Send one</button>
-        </div>
-      </div>
-
-      <div id="replyView" class="popup-view hidden">
-        <p class="label">Secret reply</p>
-        <textarea id="replyInput" class="message-input" maxlength="120" rows="4" placeholder="כתוב/י תשובה קצרה..."></textarea>
-        <button id="makeReplyBtn" class="primary-btn wide" type="button">Make reply capsule</button>
-        <textarea id="replyShareText" class="share-text hidden" rows="6" readonly></textarea>
-        <div id="replyActions" class="actions-grid hidden">
-          <button id="replyCopyBtn" class="secondary-btn" type="button">Copy</button>
-          <button id="replyShareBtn" class="secondary-btn" type="button">Share</button>
-          <button id="replyWhatsAppBtn" class="whatsapp-btn" type="button">WhatsApp</button>
-        </div>
-      </div>
-
-      <div id="popupStatus" class="soft-status"></div>
-    </section>
-  </div>
+  </template>
 </body>
 </html>

@@ -3,33 +3,41 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>SecretMoji reset</title>
+  <title>CodeMoji Reset</title>
   <style>
-    body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;min-height:100svh;display:grid;place-items:center;margin:0;background:#fff6d8;color:#2b2150}
-    .card{max-width:420px;margin:20px;padding:24px;border-radius:28px;background:rgba(255,255,255,.72);box-shadow:0 24px 70px rgba(124,92,255,.22);text-align:center}
-    .pill{display:inline-block;padding:8px 12px;border-radius:999px;background:#dff7ee;color:#135f46;font-weight:800}
+    body { margin:0; min-height:100svh; display:grid; place-items:center; font-family:system-ui,Arial,sans-serif; background:#fff6d8; color:#201331; }
+    main { width:min(420px, calc(100% - 24px)); padding:24px; border-radius:28px; background:white; box-shadow:0 24px 60px rgba(53,32,86,.18); }
+    button,a { display:grid; place-items:center; min-height:48px; border-radius:18px; border:0; font-weight:900; text-decoration:none; }
+    button { width:100%; background:#7c5cff; color:white; }
+    a { margin-top:10px; background:#f3efff; color:#201331; }
   </style>
 </head>
 <body>
-  <main class="card">
-    <div class="pill">SecretMoji reset</div>
-    <h1>מנקה גרסה ישנה...</h1>
-    <p>עוד רגע נפתח את הגרסה הנקייה.</p>
+  <main>
+    <h1>CodeMoji Reset</h1>
+    <p>המסך הזה מנקה cache ו-service workers ישנים במובייל.</p>
+    <button id="resetBtn">ניקוי ורענון</button>
+    <a href="./?v=cm8-reset">חזרה ל-CodeMoji</a>
+    <p id="status"></p>
   </main>
   <script>
-    (async () => {
+    const status = document.getElementById("status");
+    document.getElementById("resetBtn").onclick = async () => {
       try {
-        if ('serviceWorker' in navigator) {
+        if ("serviceWorker" in navigator) {
           const regs = await navigator.serviceWorker.getRegistrations();
           await Promise.all(regs.map((r) => r.unregister()));
         }
-        if ('caches' in window) {
+        if ("caches" in window) {
           const keys = await caches.keys();
           await Promise.all(keys.map((k) => caches.delete(k)));
         }
-      } catch (e) {}
-      location.replace('./?v=v7-simple-20260512-02&reset=1');
-    })();
+        status.textContent = "נוקה. חוזרים לגרסה החדשה.";
+        location.href = "./?v=cm8-clean";
+      } catch {
+        status.textContent = "ניקוי חלקי. נסה/י רענון ידני.";
+      }
+    };
   </script>
 </body>
 </html>

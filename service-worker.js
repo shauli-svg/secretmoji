@@ -1,4 +1,4 @@
-const SECRETMOJI_SW_RESET = "v7-simple-20260512-02";
+const CODEMOJI_SW_RESET = "CM8_NO_CACHE";
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (event) => {
   event.waitUntil(
